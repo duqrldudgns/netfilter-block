@@ -98,7 +98,7 @@ static uint32_t print_pkt (struct nfq_data *tb)
                             httph = httph+i;
                             for(int i=0;i<6;i++) printf("%c",*(httph+i));
 
-                            if(!strncmp( URL, (u_char *)(httph +6) , sizeof(URL)-1 ) ){
+                            if(!strncmp( URL, (char *)(httph +6) , sizeof(URL)-1 ) ){
                                 NF=0;
                                 puts("\n-----------------------NOPE-----------------------\n");
                             }
