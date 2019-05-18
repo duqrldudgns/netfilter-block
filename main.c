@@ -10,13 +10,35 @@
 #include <libnet.h>
 
 static int NF = 1;
+char * URL;
 
-void dump(unsigned char* buf, int size) {
-    int i;
-    for (i = 0; i < size; i++) {
-        if (i % 16 == 0)
-            printf("\n");
-        printf("%02x ", buf[i]);
+void dump(unsigned char* data, int size) {
+    NF = 1;     //ACCEPT = 1 , DROP = 0
+    struct libnet_ipv4_hdr* iph = (struct libnet_ipv4_hdr *)data;
+
+    if(iph->ip_p == IPPROTO_TCP){
+        struct libnet_tcp_hdr* tcph = (struct libnet_tcp_hdr *)(data+(iph->ip_hl<<2));
+        int http_len = ntohs(iph->ip_len) - (iph->ip_hl<<2) - (tcph->th_off<<2);
+
+        if( (ntohs(tcph->th_dport) ==80) && (http_len > 0) ){
+            u_char* httph = (u_char *)tcph + (tcph->th_off<<2);
+
+            if(*httph ==0x47 && *(httph+1) ==0x45 && *(httph+2) ==0x54 && *(httph+3) ==0x20){
+
+                for(int i=4;i>0;i++){
+                    if(*(httph+i)==0x48 && *(httph+i+1)==0x6f && *(httph+i+2)==0x73 && *(httph+i+3)==0x74 && *(httph+i+4)==0x3a && *(httph+i+5)==0x20){
+                        httph = httph+i;
+                        for(int i=0;i<6;i++) printf("%c",*(httph+i));
+
+                        if(!strncmp( URL, (char *)(httph +6) , sizeof(URL)-1 ) ){
+                            NF=0;
+                            puts("\n-----------------------NOPE-----------------------\n");
+                        }
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -79,35 +101,8 @@ static uint32_t print_pkt (struct nfq_data *tb)
     ret = nfq_get_payload(tb, &data);
     if (ret >= 0){
         printf(" payload_len=%d ", ret);
-        //dump(data,ret);
-        NF = 1;     //ACCEPT = 1 , DROP = 0
-        char URL[] = "test.gilgil.net";
-        struct libnet_ipv4_hdr* iph = (struct libnet_ipv4_hdr *)data;
+        dump(data,ret);
 
-        if(iph->ip_p == IPPROTO_TCP){
-            struct libnet_tcp_hdr* tcph = (struct libnet_tcp_hdr *)(data+(iph->ip_hl<<2));
-            int http_len = ntohs(iph->ip_len) - (iph->ip_hl<<2) - (tcph->th_off<<2);
-
-            if( (ntohs(tcph->th_dport) ==80) && (http_len > 0) ){
-                u_char* httph = (u_char *)tcph + (tcph->th_off<<2);
-
-                if(*httph ==0x47 && *(httph+1) ==0x45 && *(httph+2) ==0x54 && *(httph+3) ==0x20){
-
-                    for(int i=4;i>0;i++){
-                        if(*(httph+i)==0x48 && *(httph+i+1)==0x6f && *(httph+i+2)==0x73 && *(httph+i+3)==0x74 && *(httph+i+4)==0x3a && *(httph+i+5)==0x20){
-                            httph = httph+i;
-                            for(int i=0;i<6;i++) printf("%c",*(httph+i));
-
-                            if(!strncmp( URL, (char *)(httph +6) , sizeof(URL)-1 ) ){
-                                NF=0;
-                                puts("\n-----------------------NOPE-----------------------\n");
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-        }
     }
     fputc('\n', stdout);
     return id;
@@ -122,14 +117,25 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
     return nfq_set_verdict(qh, id, NF, 0, NULL); //NF_DROP 0, NF_ACCEPT 1
 }
 
+void usage(){
+    printf("syntax : netfilter_block \n");
+    printf("sample : netfilter_block test.gilgil.net \n");
+}
+
 int main(int argc, char **argv){
+    if (argc != 2){
+        usage();
+        return -1;
+    }
     struct nfq_handle *h;
     struct nfq_q_handle *qh;
     int fd;
     int rv;
     uint32_t queue = 0;
     char buf[4096] __attribute__ ((aligned));
+    URL = argv[1];
 
+    /*
     if (argc == 2) {
         queue = atoi(argv[1]);
         if (queue > 65535) {
@@ -137,7 +143,7 @@ int main(int argc, char **argv){
             exit(EXIT_FAILURE);
         }
     }
-
+*/
     printf("opening library handle\n");
     h = nfq_open();
     if (!h) {
@@ -157,8 +163,8 @@ int main(int argc, char **argv){
         exit(1);
     }
 
-    printf("binding this socket to queue '%d'\n", queue);
-    qh = nfq_create_queue(h, queue, &cb, NULL);
+    printf("binding this socket to queue '0'\n");
+    qh = nfq_create_queue(h, 0, &cb, NULL);
     if (!qh) {
         fprintf(stderr, "error during nfq_create_queue()\n");
         exit(1);
