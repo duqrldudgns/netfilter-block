@@ -32,7 +32,7 @@ void find_block_site(unsigned char* data) {
     //        printf("%02x ", data[i]);
     //    }
 
-    NF_Status=1;    //init
+    NF_Status=NF_ACCEPT;    //init
 
     if ( *data == IP ){
         struct ip *iph = (struct ip *) data;
@@ -40,11 +40,14 @@ void find_block_site(unsigned char* data) {
         if ( iph->ip_p == IPPROTO_TCP ){
             struct tcphdr *tcph = (struct tcphdr *)( (uint8_t *)iph + (iph->ip_hl << 2) );
             uint8_t *httph = (uint8_t *)tcph + (tcph->th_off << 2);
+            int httph_len = ntohs(iph->ip_len) - (iph->ip_hl << 2) - (tcph->th_off << 2);
+
+            if( httph_len ==0 && ntohs(tcph->th_dport)!=0x80 );
 
             //  GET / HTTP/1.1\r\n  length is 16byte
-            if( memcmp(httph, "GET", 3)==0 && memcmp(httph+16, "Host: ", 6)==0 && memcmp(httph+16+6, block_site, strlen(block_site))==0 ){
-                    printf("\n========%s block========\n", block_site);
-                    NF_Status=0;
+            else if( memcmp(httph, "GET", 3)==0 && memcmp(httph+16, "Host: ", 6)==0 && memcmp(httph+16+6, block_site, strlen(block_site))==0 ){
+                printf("\n==================%s block=================\n", block_site);
+                NF_Status=NF_DROP;
             }
         }
     }
@@ -77,24 +80,24 @@ static u_int32_t print_pkt (struct nfq_data *tb)
         printf("%02x ", hwph->hw_addr[hlen-1]);
     }
 
-        mark = nfq_get_nfmark(tb);
-        if (mark)
-            printf("mark=%u ", mark);
+    mark = nfq_get_nfmark(tb);
+    if (mark)
+        printf("mark=%u ", mark);
 
-        ifi = nfq_get_indev(tb);
-        if (ifi)
-            printf("indev=%u ", ifi);
+    ifi = nfq_get_indev(tb);
+    if (ifi)
+        printf("indev=%u ", ifi);
 
-        ifi = nfq_get_outdev(tb);
-        if (ifi)
-            printf("outdev=%u ", ifi);
-        ifi = nfq_get_physindev(tb);
-        if (ifi)
-            printf("physindev=%u ", ifi);
+    ifi = nfq_get_outdev(tb);
+    if (ifi)
+        printf("outdev=%u ", ifi);
+    ifi = nfq_get_physindev(tb);
+    if (ifi)
+        printf("physindev=%u ", ifi);
 
-        ifi = nfq_get_physoutdev(tb);
-        if (ifi)
-            printf("physoutdev=%u ", ifi);
+    ifi = nfq_get_physoutdev(tb);
+    if (ifi)
+        printf("physoutdev=%u ", ifi);
 
     ret = nfq_get_payload(tb, &data);
     if (ret >= 0){
