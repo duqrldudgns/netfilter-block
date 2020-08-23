@@ -120,7 +120,7 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 }
 
 void usage(){
-    printf("syntax : netfilter-test \n");
+    printf("syntax : netfilter-test <host> \n");
     printf("sample : netfilter-test test.gilgil.net \n");
 }
 
